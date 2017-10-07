@@ -1,71 +1,90 @@
 # Requires macOS list of words to be present in /usr/share/dict/words
-# Run:
-#   #=> crystal hangman.cr
-
-WORD_LENGTH = (8..10).to_a.sample
-
-def list_of_words
-  File.read("/usr/share/dict/words").split("\n").group_by { |w| w.size }
-end
-
-def get_word(all_words, target_length)
-  all_words[target_length].sample.downcase
-end
-
-def most_common_character_map(all_words, target_length)
-  # [ ... , {"a", 25839} , {"i", 27630} , {"e", 33296} ]
-  all_words[target_length].flat_map { |w| w.split("") }.group_by { |c| c }.map { |k, v| {k, v.size } } #.to_h
-end
-
 #
-# Guesses
-#
+# Run:  `$ crystal hangman.cr`
 
-def next_guess(frequency_hash)
-  frequency_hash.max_by { |x| x[1] }
-end
+module Dictionary
 
-def slots_remaining(guessed)
-  guessed.select { |x| x[1] == "-" }.size
-end
+  def word_length
+    (8..10).to_a.sample
+  end
 
+  def list_of_words
+    File.read("/usr/share/dict/words").split("\n").group_by { |w| w.size }
+  end
 
-def update_status(guessed, next_guess)
-  guessed.map { |x| (x[0] == next_guess[0] ? [x[0], x[0]] : x)  }
-end
+  def get_word(target_length)
+    list_of_words[target_length].sample.downcase
+  end
 
-def remove_guessed_letter(guessed, guessed_letter)
-  guessed.reject { |x| x[0] == guessed_letter }
-end
-
-def print_status(guessed)
-  puts "The word is #{guessed.map { |x| x[1] }.join } (#{slots_remaining(guessed)} of #{WORD_LENGTH} digits remaining)"
-end
-
-
-# Select Word
-def play_game
-
-  puts "\nSelecting a word from the dictionary at random...\n\n"
-
-  word    = get_word(list_of_words, WORD_LENGTH)
-  guessed = word.split("").map { |x| {x, "-"} }
-  print_status(guessed)
-
-  letter_vs_frequency = most_common_character_map(list_of_words, WORD_LENGTH)
-
-
-  while slots_remaining(guessed) > 0
-    guess = next_guess(letter_vs_frequency)
-
-    puts "Trying #{guess[0]}..."
-
-    letter_vs_frequency = remove_guessed_letter(letter_vs_frequency, guess[0])
-
-    guessed = update_status(guessed, guess)
-    print_status(guessed)
+  def most_common_character_map(target_length)
+    # Return list of tuples {letter, frequency}
+    #   [ ... , {"a", 25839} , {"i", 27630} , {"e", 33296} ]
+    list_of_words[target_length].flat_map { |w| w.split("") }.group_by { |c| c }.map { |k, v| {k, v.size } }
   end
 
 end
 
-play_game
+
+module Guess
+
+  def next_guess(frequency_hash)
+    frequency_hash.max_by { |x| x[1] }
+  end
+
+  def slots_remaining(guessed)
+    guessed.select { |x| x[1] == "-" }.size
+  end
+
+  def slots_total(guessed)
+    guessed.size
+  end
+
+  def update_status(guess_map, next_guess)
+    guess_map.map { |x| (x[0] == next_guess[0] ? [x[0], x[0]] : x) }
+  end
+
+  def remove_chosen_letter(guess_map, guessed_letter)
+    guess_map.reject { |x| x[0] == guessed_letter }
+  end
+
+  def print_status(guess_map)
+    puts "The word is #{guess_map.map { |x| x[1] }.join } (#{slots_remaining(guess_map)} of #{slots_total(guess_map)} digits remaining)"
+  end
+
+end
+
+
+class Game
+
+  include Dictionary
+  include Guess
+
+  def play_game
+
+    puts "\nSelecting a word from the dictionary at random...\n\n"
+
+    word_length = word_length()
+    chosen_word = get_word(word_length)
+    guess_map   = chosen_word.split("").map { |x| {x, "-"} }
+
+    letter_vs_frequency = most_common_character_map(word_length)
+    
+    print_status(guess_map)
+
+
+    while slots_remaining(guess_map) > 0
+      guess = next_guess(letter_vs_frequency)
+
+      puts "\nTrying #{guess[0]}..."
+
+      letter_vs_frequency = remove_chosen_letter(letter_vs_frequency, guess[0])
+
+      guess_map = update_status(guess_map, guess)
+      print_status(guess_map)
+    end
+
+  end
+end
+
+
+Game.new.play_game
